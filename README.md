@@ -97,14 +97,17 @@ This clears the cache and reloads from the original Excel files.
 Execute queries directly without entering the REPL:
 
 ```bash
-# Query using cached data
+# Query using cached data (defaults to test_data folder)
 uv run python main.py --query "SELECT * FROM users_Sheet1"
 
-# Auto-load data folder and query
-uv run python main.py test_data --query "SELECT name, email FROM users_Sheet1 WHERE id = 1"
+# Short form
+uv run python main.py -q "SELECT name, email FROM users_Sheet1 WHERE id = 1"
 
-# Complex query with joins
-uv run python main.py test_data -q "SELECT u.name, o.product_name FROM users_Sheet1 u JOIN orders_Sheet1 o ON u.id = o.user_id"
+# Specify a different source folder
+uv run python main.py --source my_data -q "SELECT * FROM my_table"
+
+# Complex query with joins (uses default test_data)
+uv run python main.py -q "SELECT u.name, o.product_name FROM users_Sheet1 u JOIN orders_Sheet1 o ON u.id = o.user_id"
 ```
 
 ### Query Examples
@@ -150,12 +153,15 @@ ORDER BY total_spent DESC;
 ### Command-Line Arguments
 
 ```bash
-python main.py [data_folder] [--query QUERY] [--db DB_PATH]
+python main.py [data_folder] [--query QUERY] [--source SOURCE] [--db DB_PATH]
 ```
 
-- `data_folder` - Optional path to auto-load Excel files
+- `data_folder` - Optional positional argument for data folder path
 - `--query`, `-q` - Execute a query and exit (non-interactive)
+- `--source`, `-s` - Default data source folder (default: `test_data`)
 - `--db` - Custom database path (default: `~/.sql_excel_data.db`)
+
+**Note:** The positional `data_folder` takes priority over `--source`. If neither is provided, it defaults to `test_data`.
 
 ## Additional Resources
 

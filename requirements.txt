@@ -4,3 +4,5 @@ tabulate
 rich
 prompt_toolkit
 fastmcp
+pytest
+pytest-cov
