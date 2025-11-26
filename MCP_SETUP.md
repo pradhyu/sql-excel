@@ -21,6 +21,46 @@ The MCP server provides the following tools:
 
 ## Configuration
 
+### For Antigravity
+
+There are two ways to configure the MCP server for Antigravity:
+
+#### Option 1: Via Antigravity UI (Recommended)
+
+1. Open Antigravity
+2. Press `Ctrl+Cmd+B` to open the Agent Side Panel (if not visible)
+3. Click the "Additional options" menu button (three dots `...`)
+4. Select "MCP Servers"
+5. Click "Add Custom MCP" or "New MCP Server"
+6. Fill in the details:
+   - **Name:** `excel-sqlite`
+   - **Type:** `local` or `stdio`
+   - **Command:** `uv`
+   - **Args:** `--directory /Users/pkshrestha/git/sql-excel run mcp_server.py`
+7. Click "Refresh" to activate the server
+
+#### Option 2: Manual Configuration
+
+Add this to `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "excel-sqlite": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/pkshrestha/git/sql-excel",
+        "run",
+        "mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
+After adding the configuration, restart Antigravity or refresh the MCP servers list.
+
 ### For Claude Desktop
 
 Add this to your Claude Desktop MCP configuration file:
@@ -43,7 +83,7 @@ Add this to your Claude Desktop MCP configuration file:
 }
 ```
 
-### For Antigravity or Other MCP Clients
+### For Other MCP Clients
 
 Use the provided `mcp_config.json` or configure your client to run:
 

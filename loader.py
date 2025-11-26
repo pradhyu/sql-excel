@@ -1,10 +1,15 @@
 import os
 import sqlite3
 import pandas as pd
+from pathlib import Path
 from utils import sanitize_identifier
 
 class ExcelLoader:
-    def __init__(self, db_path=":memory:"):
+    def __init__(self, db_path=None):
+        # Use persistent database by default
+        if db_path is None:
+            db_path = str(Path.home() / '.sql_excel_data.db')
+        self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
 
@@ -68,6 +73,23 @@ class ExcelLoader:
         except Exception as e:
             print(f"Error writing table {table_name}: {e}")
 
+    def has_data(self):
+        """
+        Check if the database has any tables loaded.
+        """
+        tables = self.get_tables()
+        return len(tables) > 0
+    
+    def clear_data(self):
+        """
+        Clear all tables from the database.
+        """
+        tables = self.get_tables()
+        for table in tables:
+            self.cursor.execute(f"DROP TABLE IF EXISTS {table}")
+        self.conn.commit()
+        print(f"Cleared {len(tables)} table(s) from database.")
+    
     def get_tables(self):
         """
         Returns a list of all tables in the database.

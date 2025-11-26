@@ -1,4 +1,5 @@
 import sys
+import argparse
 import pandas as pd
 from loader import ExcelLoader
 from rich.console import Console
@@ -13,9 +14,10 @@ from prompt_toolkit.styles import Style
 console = Console()
 
 class ExcelSqlRepl:
-    def __init__(self):
+    def __init__(self, auto_load_path=None):
         self.loader = ExcelLoader()
         self.session = PromptSession(history=InMemoryHistory())
+        self.auto_load_path = auto_load_path
         
         # Custom style for the prompt
         self.style = Style.from_dict({
