@@ -1,10 +1,13 @@
 # Excel to SQLite REPL
 
-A Python-based interactive shell that allows you to load Excel files into an in-memory SQLite database and query them using SQL with a beautiful, colorful interface.
+A Python-based interactive shell that allows you to load Excel files into a SQLite database and query them using SQL with a beautiful, colorful interface. Features persistent caching, auto-loading, and both interactive and non-interactive modes.
 
 ## Features
 
 - **Load Excel Files**: Load a single `.xlsx` file or an entire directory of files.
+- **Persistent Caching**: Data is cached in `~/.sql_excel_data.db` - load once, query anytime!
+- **Auto-Loading**: Pass a data folder as argument to auto-load on startup.
+- **Non-Interactive Mode**: Execute queries directly from command line with `--query`.
 - **Automatic Sanitization**: 
   - Sheet names are converted to valid SQL table names (e.g., "Sales Data (2024)" -> `Sales_Data__2024_`).
   - Column headers are sanitized to be valid SQL identifiers (e.g., "Salary ($)" -> `Salary____`).
@@ -13,7 +16,7 @@ A Python-based interactive shell that allows you to load Excel files into an in-
 - **Rich UI**: Colorful, formatted output using the `rich` library.
 - **Multi-line Queries**: Write SQL queries across multiple lines. Press Enter to continue, end with `;` to execute.
 - **Smart History**: Multi-line queries are stored as a single history entry (use Up arrow to recall).
-- **Detailed Metadata**: The `tables` command shows row count, column count, and all column names.
+- **Detailed Metadata**: The `tables` command shows row count, column count, and all column names with types.
 
 ## Supported SQL Features
 
@@ -29,7 +32,7 @@ Since this tool uses the standard SQLite engine, **all standard SQLite SQL synta
   - Math: `ABS()`, `ROUND()`, `RANDOM()`.
 - **Set Operations**: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`.
 
-*Note: The database is in-memory. While you can execute `INSERT`, `UPDATE`, or `DELETE` statements, changes will be lost when you exit the REPL.*
+*Note: The database is persistent (stored in `~/.sql_excel_data.db`). Changes made with `INSERT`, `UPDATE`, or `DELETE` will persist across sessions. Use the `refresh` command to reload from Excel files.*
 
 ## Installation
 
@@ -49,77 +52,110 @@ This project uses `uv` for fast dependency management.
 
 ## Usage
 
+### Quick Start
+
 1. **Generate Test Data** (optional):
-   First, generate the sample data so you can follow the examples below:
    ```bash
-   python create_test_data.py
+   uv run python create_test_data.py
    ```
 
-2. **Start the REPL**:
+2. **Auto-load and start REPL** (recommended):
    ```bash
-   python main.py
+   uv run python main.py test_data
    ```
+   This loads the data folder on first run and caches it. Subsequent runs use the cache automatically!
 
-3. **Load Data**:
-   Inside the REPL, load the test data folder:
-   ```text
-   (sql-excel) load test_data
-   ```
-   *Output:*
-   ```text
-   Loaded test_data/users.xlsx [Sheet1] -> Table: users_Sheet1
-   Loaded test_data/orders.xlsx [Sheet1] -> Table: orders_Sheet1
-   Loaded test_data/complex_data.xlsx [Employee Records] -> Table: complex_data_Employee_Records
-   Loaded test_data/complex_data.xlsx [Sales Data (2024)] -> Table: complex_data_Sales_Data__2024_
-   Loaded test_data/large_data.xlsx [Sheet1] -> Table: large_data_Sheet1
-   Successfully loaded 5 tables.
-   ```
+### Interactive Mode
 
-4. **View Tables with Metadata**:
-   ```text
-   (sql-excel) tables
-   ```
-   This displays a formatted table showing:
-   - Table name
-   - Number of rows
-   - Number of columns
-   - Column names
+**Start the REPL with auto-loading:**
+```bash
+uv run python main.py test_data
+```
 
-5. **Query Data**:
+**Or start empty and load manually:**
+```bash
+uv run python main.py
+```
+Then inside the REPL:
+```text
+(sql-excel) load test_data
+```
 
-   **Example 1: Simple Select**
-   ```sql
-   SELECT * FROM users_Sheet1;
-   ```
+**View loaded tables:**
+```text
+(sql-excel) tables
+```
 
-   **Example 2: Multi-line Join Query**
-   ```sql
-   SELECT u.name, o.product_name, o.amount 
-   FROM users_Sheet1 u 
-   JOIN orders_Sheet1 o ON u.id = o.user_id;
-   ```
-   *Note: Press Enter to add new lines. End with `;` and press Enter to execute.*
+**Refresh data from Excel files:**
+```text
+(sql-excel) refresh
+```
+This clears the cache and reloads from the original Excel files.
 
-   **Example 3: Querying data with sanitized names**
-   ```sql
-   SELECT Full_Name, Salary____ 
-   FROM complex_data_Employee_Records 
-   WHERE Salary____ > 60000;
-   ```
+### Non-Interactive Mode
 
-   **Example 4: Aggregation with Group By**
-   ```sql
-   SELECT u.name, SUM(o.amount) as total_spent 
-   FROM users_Sheet1 u 
-   JOIN orders_Sheet1 o ON u.id = o.user_id 
-   GROUP BY u.name 
-   ORDER BY total_spent DESC;
-   ```
+Execute queries directly without entering the REPL:
 
-6. **Exit**:
-   ```text
-   (sql-excel) exit
-   ```
+```bash
+# Query using cached data
+uv run python main.py --query "SELECT * FROM users_Sheet1"
+
+# Auto-load data folder and query
+uv run python main.py test_data --query "SELECT name, email FROM users_Sheet1 WHERE id = 1"
+
+# Complex query with joins
+uv run python main.py test_data -q "SELECT u.name, o.product_name FROM users_Sheet1 u JOIN orders_Sheet1 o ON u.id = o.user_id"
+```
+
+### Query Examples
+
+**Simple Select:**
+```sql
+SELECT * FROM users_Sheet1;
+```
+
+**Multi-line Join Query:**
+```sql
+SELECT u.name, o.product_name, o.amount 
+FROM users_Sheet1 u 
+JOIN orders_Sheet1 o ON u.id = o.user_id;
+```
+*Note: Press Enter to add new lines. End with `;` and press Enter to execute.*
+
+**Querying with Sanitized Names:**
+```sql
+SELECT Full_Name, Salary____ 
+FROM complex_data_Employee_Records 
+WHERE Salary____ > 60000;
+```
+
+**Aggregation with Group By:**
+```sql
+SELECT u.name, SUM(o.amount) as total_spent 
+FROM users_Sheet1 u 
+JOIN orders_Sheet1 o ON u.id = o.user_id 
+GROUP BY u.name 
+ORDER BY total_spent DESC;
+```
+
+### Available Commands
+
+- `load <path>` - Load Excel file(s) from a path
+- `tables` - List all tables with metadata (rows, columns, types)
+- `schema <table>` - Show CREATE TABLE statement
+- `refresh` - Clear cache and reload from Excel files
+- `exit` / `quit` - Exit the REPL
+- `<sql query>` - Execute any SQL query (end with `;`)
+
+### Command-Line Arguments
+
+```bash
+python main.py [data_folder] [--query QUERY] [--db DB_PATH]
+```
+
+- `data_folder` - Optional path to auto-load Excel files
+- `--query`, `-q` - Execute a query and exit (non-interactive)
+- `--db` - Custom database path (default: `~/.sql_excel_data.db`)
 
 ## Additional Resources
 
