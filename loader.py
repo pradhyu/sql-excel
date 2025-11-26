@@ -75,6 +75,41 @@ class ExcelLoader:
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         return [row[0] for row in self.cursor.fetchall()]
 
+    def get_table_details(self):
+        """
+        Returns a list of dictionaries containing table metadata:
+        name, row_count, col_count, columns (with types)
+        """
+        tables = self.get_tables()
+        details = []
+        for table in tables:
+            # Get row count
+            try:
+                self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                row_count = self.cursor.fetchone()[0]
+            except:
+                row_count = 0
+            
+            # Get columns info with types
+            try:
+                # PRAGMA table_info returns (cid, name, type, notnull, dflt_value, pk)
+                self.cursor.execute(f"PRAGMA table_info({table})")
+                columns_info = self.cursor.fetchall()
+                # Format as "column_name (TYPE)"
+                columns = [f"{col[1]} ({col[2]})" if col[2] else col[1] for col in columns_info]
+                col_count = len(columns)
+            except:
+                columns = []
+                col_count = 0
+            
+            details.append({
+                "name": table,
+                "rows": row_count,
+                "cols": col_count,
+                "columns": columns
+            })
+        return details
+
     def get_schema(self, table_name):
         """
         Returns the CREATE TABLE statement for a given table.

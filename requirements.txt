@@ -1,3 +1,6 @@
 pandas
 openpyxl
 tabulate
+rich
+prompt_toolkit
+fastmcp

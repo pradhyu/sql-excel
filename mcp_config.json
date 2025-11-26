@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "excel-sqlite": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/Users/pkshrestha/git/sql-excel",
+                "run",
+                "mcp_server.py"
+            ]
+        }
+    }
+}

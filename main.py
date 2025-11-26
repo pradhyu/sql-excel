@@ -1,88 +1,222 @@
-import cmd
 import sys
-from loader import ExcelLoader
-from tabulate import tabulate
 import pandas as pd
+from loader import ExcelLoader
+from rich.console import Console
+from rich.table import Table
+from rich import box
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.styles import Style
 
-class ExcelSqlRepl(cmd.Cmd):
-    intro = 'Welcome to the Excel-to-SQLite REPL. Type help or ? to list commands.\n'
-    prompt = '(sql-excel) '
+# Initialize Rich Console
+console = Console()
 
+class ExcelSqlRepl:
     def __init__(self):
-        super().__init__()
         self.loader = ExcelLoader()
+        self.session = PromptSession(history=InMemoryHistory())
+        
+        # Custom style for the prompt
+        self.style = Style.from_dict({
+            'prompt': 'ansicyan bold',
+            'continuation': 'ansigray',
+        })
+
+    def print_welcome(self):
+        console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
+        console.print("Type [bold cyan]help[/bold cyan] or [bold cyan]?[/bold cyan] to list commands.")
+        console.print("Ends SQL queries with a semicolon ([bold yellow];[/bold yellow]).\n")
 
     def do_load(self, arg):
-        """
-        Load an Excel file or directory of Excel files.
-        Usage: load <path>
-        """
+        """Load an Excel file or directory."""
         if not arg:
-            print("Usage: load <path>")
+            console.print("[bold red]Usage:[/bold red] load <path>")
             return
         
-        tables = self.loader.load_path(arg)
+        with console.status("[bold green]Loading files...[/bold green]"):
+            tables = self.loader.load_path(arg)
+        
         if tables:
-            print(f"Successfully loaded {len(tables)} tables.")
+            console.print(f"[bold green]Successfully loaded {len(tables)} tables.[/bold green]")
         else:
-            print("No tables loaded.")
+            console.print("[yellow]No tables loaded.[/yellow]")
 
     def do_tables(self, arg):
-        """
-        List all available tables in the database.
-        Usage: tables
-        """
-        tables = self.loader.get_tables()
-        if tables:
-            print(tabulate([[t] for t in tables], headers=['Table Name'], tablefmt='psql'))
+        """List all available tables with metadata."""
+        details = self.loader.get_table_details()
+        if details:
+            table = Table(title="Loaded Tables", box=box.ROUNDED)
+            table.add_column("Table Name", style="cyan", no_wrap=True)
+            table.add_column("Rows", justify="right", style="magenta")
+            table.add_column("Cols", justify="right", style="magenta")
+            table.add_column("Columns", style="green")
+
+            for d in details:
+                # Show all columns without truncation, with color-coded types
+                colored_cols = []
+                for col in d['columns']:
+                    # Apply color coding to types
+                    if '(INTEGER)' in col:
+                        col = col.replace('(INTEGER)', '[blue](INTEGER)[/blue]')
+                    elif '(TEXT)' in col:
+                        col = col.replace('(TEXT)', '[yellow](TEXT)[/yellow]')
+                    elif '(REAL)' in col:
+                        col = col.replace('(REAL)', '[magenta](REAL)[/magenta]')
+                    elif '(TIMESTAMP)' in col:
+                        col = col.replace('(TIMESTAMP)', '[cyan](TIMESTAMP)[/cyan]')
+                    elif '(BLOB)' in col:
+                        col = col.replace('(BLOB)', '[red](BLOB)[/red]')
+                    colored_cols.append(col)
+                
+                cols_str = ", ".join(colored_cols)
+                
+                table.add_row(
+                    d['name'], 
+                    str(d['rows']), 
+                    str(d['cols']), 
+                    cols_str
+                )
+            console.print(table)
         else:
-            print("No tables found.")
+            console.print("[yellow]No tables found.[/yellow]")
 
     def do_schema(self, arg):
-        """
-        Show the schema (CREATE TABLE statement) for a specific table.
-        Usage: schema <table_name>
-        """
+        """Show the schema for a table."""
         if not arg:
-            print("Usage: schema <table_name>")
+            console.print("[bold red]Usage:[/bold red] schema <table_name>")
             return
         
         schema = self.loader.get_schema(arg)
         if schema:
-            print(schema)
+            console.print(f"[dim]{schema}[/dim]")
         else:
-            print(f"Table '{arg}' not found.")
+            console.print(f"[red]Table '{arg}' not found.[/red]")
 
-    def default(self, line):
-        """
-        Treat unrecognized commands as SQL queries.
-        """
-        if line == 'EOF':
-            return True
-            
-        result = self.loader.execute_query(line)
+    def do_help(self, arg):
+        """List available commands."""
+        console.print("\n[bold]Available Commands:[/bold]")
+        console.print("  [cyan]load <path>[/cyan]   - Load Excel file or directory")
+        console.print("  [cyan]tables[/cyan]        - List loaded tables with details")
+        console.print("  [cyan]schema <table>[/cyan] - Show CREATE TABLE statement")
+        console.print("  [cyan]exit / quit[/cyan]   - Exit the REPL")
+        console.print("  [cyan]<sql query>[/cyan]  - Execute SQL query (end with ;)\n")
+
+    def execute_sql(self, query):
+        """Execute SQL query and print results using Rich."""
+        result = self.loader.execute_query(query)
         
         if isinstance(result, pd.DataFrame):
             if not result.empty:
-                print(tabulate(result, headers='keys', tablefmt='psql', showindex=False))
+                # Convert DataFrame to Rich Table
+                table = Table(show_header=True, header_style="bold magenta", box=box.SIMPLE)
+                
+                # Add columns
+                for col in result.columns:
+                    table.add_column(str(col))
+                
+                # Add rows
+                for _, row in result.iterrows():
+                    table.add_row(*[str(val) for val in row])
+                
+                console.print(table)
             else:
-                print("Query returned no results.")
+                console.print("[yellow]Query returned no results.[/yellow]")
         elif result is None:
-            print("Query executed successfully.")
+            console.print("[green]Query executed successfully.[/green]")
         else:
-            print(result)
+            console.print(f"[bold red]Error:[/bold red] {result}")
 
-    def do_exit(self, arg):
-        """Exit the REPL."""
-        print("Goodbye!")
-        return True
+    def run(self):
+        self.print_welcome()
+        
+        while True:
+            try:
+                # Prompt for input
+                text = self.session.prompt(
+                    HTML('<prompt>(sql-excel)</prompt> '),
+                    style=self.style,
+                    multiline=True,
+                    prompt_continuation=HTML('<continuation>   > </continuation>'),
+                    # Custom validator to determine when to submit
+                    # We submit if the text ends with ';' or is a known single-line command
+                )
+                
+                text = text.strip()
+                if not text:
+                    continue
 
-    def do_quit(self, arg):
-        """Exit the REPL."""
-        return self.do_exit(arg)
+                # Check for commands
+                parts = text.split(maxsplit=1)
+                cmd = parts[0].lower()
+                arg = parts[1] if len(parts) > 1 else ""
+
+                if cmd in ['exit', 'quit']:
+                    console.print("[bold green]Goodbye![/bold green]")
+                    break
+                elif cmd == 'load':
+                    self.do_load(arg)
+                elif cmd == 'tables':
+                    self.do_tables(arg)
+                elif cmd == 'schema':
+                    self.do_schema(arg)
+                elif cmd in ['help', '?']:
+                    self.do_help(arg)
+                else:
+                    # Treat as SQL
+                    # If it doesn't end with semicolon, prompt_toolkit multiline=True 
+                    # usually requires Meta+Enter to submit. 
+                    # However, we can enforce semicolon check if we want strict SQL mode,
+                    # but prompt_toolkit's default multiline behavior is user-friendly enough 
+                    # (Meta+Enter to submit). 
+                    # BUT user specifically asked for "Ends SQL queries with a semicolon".
+                    # The prompt_toolkit loop above waits for submit. 
+                    # If we want Enter to submit for commands but NOT for SQL unless semicolon...
+                    # That requires a custom key binding or validator.
+                    # For simplicity and robustness with the "multiline=True" flag:
+                    # Users usually press Esc+Enter or Meta+Enter to submit in multiline mode.
+                    # To make it behave like "Enter adds newline unless semicolon", we need a key binding.
+                    # Let's stick to standard prompt_toolkit multiline behavior for now 
+                    # but check for semicolon before executing SQL.
+                    
+                    self.execute_sql(text)
+
+            except KeyboardInterrupt:
+                continue
+            except EOFError:
+                break
 
 if __name__ == '__main__':
-    try:
-        ExcelSqlRepl().cmdloop()
-    except KeyboardInterrupt:
-        print("\nGoodbye!")
+    # To enable "Enter to submit if ends with ;", we need a bit more config.
+    # But for now, let's use a simpler approach: 
+    # We will use a custom accept_handler or just rely on the user knowing 
+    # how to submit in multiline mode (Esc+Enter) OR we can use a loop 
+    # that accumulates lines like the previous implementation but with prompt_toolkit history.
+    # ACTUALLY, the best way to satisfy "multi line quries should be one entry in history"
+    # is to use prompt_toolkit's prompt() which returns the whole block.
+    # To make "Enter" smart (submit if ';', else newline), we use a key binding.
+    
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.filters import Condition
+
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        buff = event.current_buffer
+        text = buff.text.strip()
+        
+        # Commands that are single line
+        is_command = text.split()[0].lower() in ['load', 'tables', 'schema', 'exit', 'quit', 'help', '?']
+        
+        # SQL ending with semicolon
+        is_sql_complete = text.endswith(';')
+        
+        if is_command or is_sql_complete:
+            buff.validate_and_handle()
+        else:
+            buff.insert_text('\n')
+
+    repl = ExcelSqlRepl()
+    repl.session.app.key_bindings = kb # Apply bindings to the session
+    repl.run()
