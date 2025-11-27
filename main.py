@@ -320,9 +320,11 @@ class ExcelSqlRepl:
         console.print("  [cyan]<sql query>[/cyan]  - Execute SQL query (end with ;)")
         console.print("  [cyan]<query> > file.csv[/cyan] - Save query results to CSV")
         console.print("\n[dim]Keyboard shortcuts:[/dim]")
-        console.print("  [cyan]Tab[/cyan]            - Show autocomplete")
-        console.print("  [cyan]Alt+Enter[/cyan]      - Submit query (or just end with ;)")
-        console.print("  [cyan]Ctrl+D[/cyan]         - Exit REPL\n")
+        console.print("  [cyan]Tab[/cyan]              - Show autocomplete")
+        console.print("  [cyan]; + Enter[/cyan]       - Submit SQL query")
+        console.print("  [cyan]Meta+Enter[/cyan]      - Force submit (Alt+Enter or Esc+Enter)")
+        console.print("  [cyan]Ctrl+C[/cyan]          - Cancel (in some terminals)")
+        console.print("  [cyan]Ctrl+D[/cyan]          - Exit REPL\n")
 
     def execute_sql(self, text):
         """Execute a SQL query and display results."""
