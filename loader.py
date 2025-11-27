@@ -5,13 +5,13 @@ from pathlib import Path
 from utils import sanitize_identifier
 
 class ExcelLoader:
-    def __init__(self, db_path=None, backend='sqlite'):
+    def __init__(self, db_path=None, backend='duckdb'):
         """
         Initialize ExcelLoader with specified backend.
         
         Args:
             db_path: Path to database file (default: ~/.sql_excel_data.db or .duckdb)
-            backend: 'sqlite' or 'duckdb' (default: 'sqlite')
+            backend: 'sqlite' or 'duckdb' (default: 'duckdb')
         """
         self.backend = backend.lower()
         
