@@ -217,7 +217,8 @@ class ExcelSqlRepl:
         self.completer = AdvancedSQLCompleter(self.sql_keywords, tables, columns, table_to_columns, column_to_tables)
 
     def print_welcome(self):
-        console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
+        backend_name = self.loader.backend.upper()
+        console.print(f"[bold green]Welcome to the Excel-to-SQLite REPL ({backend_name} backend).[/bold green]")
         console.print("Type [bold cyan]help[/bold cyan] or [bold cyan]?[/bold cyan] to list commands.")
         console.print("End SQL queries with [bold yellow];[/bold yellow] and press Enter to execute.")
         console.print("[dim]Multi-line mode: Press Enter for new line, Meta+Enter (Alt/Esc+Enter) to submit.[/dim]\n")
@@ -434,19 +435,23 @@ class ExcelSqlRepl:
 
 if __name__ == '__main__':
     # Parse command-line arguments
+    import argparse
     parser = argparse.ArgumentParser(description='Excel to SQLite REPL')
     parser.add_argument('data_folder', nargs='?', help='Path to folder containing Excel files to auto-load')
     parser.add_argument('--db', help='Path to SQLite database file (default: ~/.sql_excel_data.db)')
     parser.add_argument('--query', '-q', help='Execute a SQL query and exit (non-interactive mode)')
     parser.add_argument('--source', '-s', default='test_data', help='Default data source folder (default: test_data)')
+    parser.add_argument('--backend', choices=['sqlite', 'duckdb'], default='duckdb', 
+                        help='Database backend to use (default: duckdb for performance, sqlite for compatibility)')
+    
     args = parser.parse_args()
     
-    # Determine which data folder to use
-    # Priority: positional argument > --source flag
-    data_path = args.data_folder if args.data_folder else args.source
+    # Determine auto-load path
+    auto_load_path = args.data_folder or args.source
     
-    # Create REPL instance
-    repl = ExcelSqlRepl(auto_load_path=data_path)
+    # Create REPL instance with specified backend
+    repl = ExcelSqlRepl(auto_load_path=auto_load_path)
+    repl.loader = ExcelLoader(db_path=args.db, backend=args.backend)
     
     # If query is provided, execute it and exit
     if args.query:

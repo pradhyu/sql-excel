@@ -5,20 +5,38 @@ from pathlib import Path
 from utils import sanitize_identifier
 
 class ExcelLoader:
-    def __init__(self, db_path=None):
-        # Use persistent database by default
-        if db_path is None:
-            db_path = str(Path.home() / '.sql_excel_data.db')
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
-        self.cursor = self.conn.cursor()
+    def __init__(self, db_path=None, backend='sqlite'):
+        """
+        Initialize ExcelLoader with specified backend.
         
-        # Performance optimizations
-        self.cursor.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
-        self.cursor.execute("PRAGMA synchronous=NORMAL")  # Faster writes
-        self.cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
-        self.cursor.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
-        self.conn.commit()
+        Args:
+            db_path: Path to database file (default: ~/.sql_excel_data.db or .duckdb)
+            backend: 'sqlite' or 'duckdb' (default: 'sqlite')
+        """
+        self.backend = backend.lower()
+        
+        # Set default path based on backend
+        if db_path is None:
+            ext = '.duckdb' if self.backend == 'duckdb' else '.db'
+            db_path = str(Path.home() / f'.sql_excel_data{ext}')
+        
+        self.db_path = db_path
+        
+        # Create connection based on backend
+        if self.backend == 'duckdb':
+            import duckdb
+            self.conn = duckdb.connect(db_path)
+            self.cursor = self.conn.cursor()
+        else:
+            self.conn = sqlite3.connect(db_path)
+            self.cursor = self.conn.cursor()
+            
+            # SQLite-specific optimizations
+            self.cursor.execute("PRAGMA journal_mode=WAL")
+            self.cursor.execute("PRAGMA synchronous=NORMAL")
+            self.cursor.execute("PRAGMA cache_size=-64000")
+            self.cursor.execute("PRAGMA temp_store=MEMORY")
+            self.conn.commit()
 
     def load_path(self, path):
         """
@@ -65,7 +83,7 @@ class ExcelLoader:
                 # Sanitize column names
                 df.columns = [sanitize_identifier(col) for col in df.columns]
                 
-                self.dataframe_to_sqlite(df, table_name)
+                self.dataframe_to_db(df, table_name)
                 loaded_tables.append(table_name)
                 
             elapsed = time.time() - start_time
@@ -76,13 +94,17 @@ class ExcelLoader:
 
         return loaded_tables
 
-    def dataframe_to_sqlite(self, df, table_name):
+    def dataframe_to_db(self, df, table_name):
         """
-        Writes a pandas DataFrame to SQLite with optimizations.
+        Writes a pandas DataFrame to the database (SQLite or DuckDB).
         """
         try:
-            # Use method='multi' for batch inserts (much faster)
-            df.to_sql(table_name, self.conn, if_exists='replace', index=False, method='multi', chunksize=1000)
+            if self.backend == 'duckdb':
+                # DuckDB can insert directly from pandas (very fast)
+                self.conn.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
+            else:
+                # SQLite with optimizations
+                df.to_sql(table_name, self.conn, if_exists='replace', index=False, method='multi', chunksize=1000)
         except Exception as e:
             print(f"Error writing table {table_name}: {e}")
 
