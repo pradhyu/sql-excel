@@ -220,7 +220,7 @@ class ExcelSqlRepl:
         console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
         console.print("Type [bold cyan]help[/bold cyan] or [bold cyan]?[/bold cyan] to list commands.")
         console.print("Ends SQL queries with a semicolon ([bold yellow];[/bold yellow]).")
-        console.print("[dim]Tip: Press Enter twice on empty line to cancel multi-line input.[/dim]\n")
+        console.print("[dim]Tip: Use Alt+Enter to submit multi-line queries.[/dim]\n")
         
         # Auto-load data if path provided and no data exists
         if self.auto_load_path:
@@ -321,7 +321,7 @@ class ExcelSqlRepl:
         console.print("  [cyan]<query> > file.csv[/cyan] - Save query results to CSV")
         console.print("\n[dim]Keyboard shortcuts:[/dim]")
         console.print("  [cyan]Tab[/cyan]            - Show autocomplete")
-        console.print("  [cyan]Enter Enter[/cyan]    - Cancel multi-line (press Enter twice on empty line)")
+        console.print("  [cyan]Alt+Enter[/cyan]      - Submit query (or just end with ;)")
         console.print("  [cyan]Ctrl+D[/cyan]         - Exit REPL\n")
 
     def execute_sql(self, text):
@@ -452,25 +452,29 @@ if __name__ == '__main__':
         sys.exit(0)
     
     from prompt_toolkit.key_binding import KeyBindings
-    from prompt_toolkit.filters import Condition
+    from prompt_toolkit.filters import Condition, has_focus, DEFAULT_BUFFER, is_done
 
     kb = KeyBindings()
 
-    @kb.add('enter')
+    @kb.add('enter', filter=has_focus(DEFAULT_BUFFER) & ~is_done)
     def _(event):
-        buff = event.current_buffer
-        text = buff.text.strip()
+        """Custom Enter behavior: submit on ; or command, otherwise newline"""
+        buffer = event.current_buffer
+        text = buffer.text.strip()
         
-        # Commands that are single line
+        # If empty, just continue (don't submit)
+        if not text:
+            buffer.insert_text('\n')
+            return
+        
+        # Check if it's a command or ends with semicolon
         is_command = text.split()[0].lower() in ['load', 'tables', 'schema', 'refresh', 'exit', 'quit', 'help', '?']
+        ends_with_semicolon = text.rstrip().endswith(';')
         
-        # SQL ending with semicolon
-        is_sql_complete = text.endswith(';')
-        
-        if is_command or is_sql_complete:
-            buff.validate_and_handle()
+        if is_command or ends_with_semicolon:
+            buffer.validate_and_handle()
         else:
-            buff.insert_text('\n')
+            buffer.insert_text('\n')
 
     # Enter interactive REPL mode
     repl.session.app.key_bindings = kb # Apply bindings to the session
