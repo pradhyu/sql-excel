@@ -219,8 +219,8 @@ class ExcelSqlRepl:
     def print_welcome(self):
         console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
         console.print("Type [bold cyan]help[/bold cyan] or [bold cyan]?[/bold cyan] to list commands.")
-        console.print("Ends SQL queries with a semicolon ([bold yellow];[/bold yellow]).")
-        console.print("[dim]Tip: Use Alt+Enter to submit multi-line queries.[/dim]\n")
+        console.print("End SQL queries with [bold yellow];[/bold yellow] and press Enter to execute.")
+        console.print("[dim]Multi-line mode: Press Enter for new line, Meta+Enter (Alt/Esc+Enter) to submit.[/dim]\n")
         
         # Auto-load data if path provided and no data exists
         if self.auto_load_path:
