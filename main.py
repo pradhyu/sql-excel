@@ -453,17 +453,16 @@ if __name__ == '__main__':
     repl = ExcelSqlRepl(auto_load_path=auto_load_path)
     repl.loader = ExcelLoader(db_path=args.db, backend=args.backend)
     
-    # If query is provided, execute it and exit
+    # Non-interactive mode: execute query and exit
     if args.query:
         repl.execute_query_and_exit(args.query)
         sys.exit(0)
     
     from prompt_toolkit.key_binding import KeyBindings
-    from prompt_toolkit.filters import Condition, has_focus, DEFAULT_BUFFER, is_done
 
     kb = KeyBindings()
 
-    @kb.add('enter', filter=has_focus(DEFAULT_BUFFER) & ~is_done)
+    @kb.add('enter')
     def _(event):
         """Custom Enter behavior: submit on ; or command, otherwise newline"""
         buffer = event.current_buffer
@@ -475,11 +474,15 @@ if __name__ == '__main__':
             return
         
         # Check if it's a command or ends with semicolon
-        is_command = text.split()[0].lower() in ['load', 'tables', 'schema', 'refresh', 'exit', 'quit', 'help', '?']
-        ends_with_semicolon = text.rstrip().endswith(';')
-        
-        if is_command or ends_with_semicolon:
-            buffer.validate_and_handle()
+        words = text.split()
+        if words:
+            is_command = words[0].lower() in ['load', 'tables', 'schema', 'refresh', 'exit', 'quit', 'help', '?']
+            ends_with_semicolon = text.rstrip().endswith(';')
+            
+            if is_command or ends_with_semicolon:
+                buffer.validate_and_handle()
+            else:
+                buffer.insert_text('\n')
         else:
             buffer.insert_text('\n')
 

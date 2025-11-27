@@ -6,9 +6,8 @@ import json
 # Initialize FastMCP
 mcp = FastMCP("sql-excel")
 
-# Initialize ExcelLoader
-# We use the default persistent DB path
-loader = ExcelLoader()
+# Initialize ExcelLoader with DuckDB for better query performance
+loader = ExcelLoader(backend='duckdb')
 
 @mcp.tool()
 def read_query(query: str) -> str:
