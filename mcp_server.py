@@ -1,92 +1,42 @@
-#!/usr/bin/env python3
-"""
-MCP Server for Excel to SQLite
-Exposes Excel loading and SQL querying capabilities via Model Context Protocol
-"""
-
 from fastmcp import FastMCP
 from loader import ExcelLoader
 import pandas as pd
-from typing import Optional
+import json
 
-# Initialize MCP server
-mcp = FastMCP("excel-sqlite")
+# Initialize FastMCP
+mcp = FastMCP("sql-excel")
 
-# Global loader instance (in-memory database)
+# Initialize ExcelLoader
+# We use the default persistent DB path
 loader = ExcelLoader()
 
 @mcp.tool()
-def load_excel(path: str) -> str:
-    """
-    Load Excel file(s) from a path into the SQLite database.
-    
-    Args:
-        path: File path or directory path containing Excel files
-        
-    Returns:
-        Status message with loaded table names
-    """
-    tables = loader.load_path(path)
-    if tables:
-        return f"Successfully loaded {len(tables)} tables: {', '.join(tables)}"
-    else:
-        return "No tables loaded. Check if the path contains valid Excel files."
-
-@mcp.tool()
-def execute_sql(query: str) -> str:
+def read_query(query: str) -> str:
     """
     Execute a SQL query against the loaded Excel data.
-    
-    Args:
-        query: SQL query to execute (SELECT, INSERT, UPDATE, DELETE, etc.)
-        
-    Returns:
-        Query results as formatted text or error message
+    Returns the result as a JSON string.
     """
     result = loader.execute_query(query)
-    
     if isinstance(result, pd.DataFrame):
-        if not result.empty:
-            return result.to_string(index=False)
-        else:
-            return "Query returned no results."
+        return result.to_json(orient='records')
     elif result is None:
-        return "Query executed successfully."
+        return "Query executed successfully (no output)."
     else:
         return str(result)
 
 @mcp.tool()
 def list_tables() -> str:
     """
-    List all available tables in the database with metadata.
-    
-    Returns:
-        Formatted list of tables with row counts, column counts, and column names with types
+    List all available tables in the database.
+    Returns a JSON string list of table names.
     """
-    details = loader.get_table_details()
-    if not details:
-        return "No tables found. Load Excel files first using load_excel()."
-    
-    output = []
-    for d in details:
-        cols_str = ", ".join(d['columns'])
-        output.append(f"Table: {d['name']}")
-        output.append(f"  Rows: {d['rows']}")
-        output.append(f"  Columns ({d['cols']}): {cols_str}")
-        output.append("")
-    
-    return "\n".join(output)
+    tables = loader.get_tables()
+    return json.dumps(tables)
 
 @mcp.tool()
-def get_schema(table_name: str) -> str:
+def get_table_schema(table_name: str) -> str:
     """
-    Get the CREATE TABLE statement for a specific table.
-    
-    Args:
-        table_name: Name of the table
-        
-    Returns:
-        CREATE TABLE SQL statement or error message
+    Get the CREATE TABLE schema for a specific table.
     """
     schema = loader.get_schema(table_name)
     if schema:
@@ -94,17 +44,25 @@ def get_schema(table_name: str) -> str:
     else:
         return f"Table '{table_name}' not found."
 
-@mcp.resource("tables://list")
-def get_tables_resource() -> str:
+@mcp.tool()
+def load_data(path: str) -> str:
     """
-    Resource endpoint to get list of all tables.
+    Load Excel files from a directory or file path.
+    Returns a list of loaded table names.
     """
-    tables = loader.get_tables()
-    if tables:
-        return "\n".join(tables)
+    tables = loader.load_path(path)
+    return json.dumps(tables)
+
+@mcp.resource("schema://{table_name}")
+def get_schema_resource(table_name: str) -> str:
+    """
+    Get the schema for a table as a resource.
+    """
+    schema = loader.get_schema(table_name)
+    if schema:
+        return schema
     else:
-        return "No tables loaded."
+        return "Table not found."
 
 if __name__ == "__main__":
-    # Run the MCP server
     mcp.run()

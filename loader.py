@@ -12,6 +12,13 @@ class ExcelLoader:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
+        
+        # Performance optimizations
+        self.cursor.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
+        self.cursor.execute("PRAGMA synchronous=NORMAL")  # Faster writes
+        self.cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        self.cursor.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
+        self.conn.commit()
 
     def load_path(self, path):
         """
@@ -38,6 +45,9 @@ class ExcelLoader:
         """
         Reads an Excel file and converts each sheet to a SQLite table.
         """
+        import time
+        start_time = time.time()
+        
         filename = os.path.splitext(os.path.basename(filepath))[0]
         sanitized_filename = sanitize_identifier(filename)
         loaded_tables = []
@@ -57,7 +67,9 @@ class ExcelLoader:
                 
                 self.dataframe_to_sqlite(df, table_name)
                 loaded_tables.append(table_name)
-                print(f"Loaded {filepath} [{sheet_name}] -> Table: {table_name}")
+                
+            elapsed = time.time() - start_time
+            print(f"Loaded {filepath} -> {len(loaded_tables)} table(s) in {elapsed:.2f}s")
                 
         except Exception as e:
             print(f"Error processing {filepath}: {e}")
@@ -66,10 +78,11 @@ class ExcelLoader:
 
     def dataframe_to_sqlite(self, df, table_name):
         """
-        Writes a pandas DataFrame to SQLite.
+        Writes a pandas DataFrame to SQLite with optimizations.
         """
         try:
-            df.to_sql(table_name, self.conn, if_exists='replace', index=False)
+            # Use method='multi' for batch inserts (much faster)
+            df.to_sql(table_name, self.conn, if_exists='replace', index=False, method='multi', chunksize=1000)
         except Exception as e:
             print(f"Error writing table {table_name}: {e}")
 

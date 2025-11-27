@@ -18,15 +18,18 @@ import sqlparse
 from sqlparse.sql import IdentifierList, Identifier
 from sqlparse.tokens import Keyword, DML
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.key_binding import KeyBindings
 
 # Initialize Rich Console
 console = Console()
 
 class AdvancedSQLCompleter(Completer):
-    def __init__(self, keywords, tables, columns):
+    def __init__(self, keywords, tables, columns, table_to_columns, column_to_tables):
         self.keywords = keywords
         self.tables = tables
         self.columns = columns
+        self.table_to_columns = table_to_columns
+        self.column_to_tables = column_to_tables
 
     def get_completions(self, document, complete_event):
         word_before_cursor = document.get_word_before_cursor(WORD=True)
@@ -38,93 +41,120 @@ class AdvancedSQLCompleter(Completer):
             return
             
         stmt = parsed[0]
-        last_token = None
-        
-        # Flatten tokens to find the last significant one
-        # This is a simplified traversal
         tokens = list(stmt.flatten())
         
         # Filter out whitespace and the word being typed
         meaningful_tokens = [t for t in tokens if not t.is_whitespace]
-        
-        # If we are typing a word, the last token might be that partial word
-        # We want the token BEFORE that to determine context
         if word_before_cursor:
-             # If the last token matches what we are typing, ignore it
              if meaningful_tokens and meaningful_tokens[-1].value.upper().startswith(word_before_cursor.upper()):
                  meaningful_tokens.pop()
         
         last_keyword = ""
         if meaningful_tokens:
-            # Search backwards for a keyword
             for token in reversed(meaningful_tokens):
                 if token.ttype in (Keyword, Keyword.DML):
                     last_keyword = token.value.upper()
                     break
                     
-        # Alias detection
-        aliases = {}
+        # Extract context information
+        present_tables = []
+        present_columns = []
         
-        # Simple alias extraction from FROM/JOIN clauses
-        # This is a heuristic and might not cover all complex cases
+        # Scan tokens for known tables and columns
+        # This is a simple scan, not structure-aware, but effective for this purpose
+        for token in meaningful_tokens:
+            val = token.value
+            if val in self.tables:
+                present_tables.append(val)
+            # Check for columns (splitting by space to handle types if needed, though usually just name)
+            # Our self.columns list has clean names
+            if val in self.columns:
+                present_columns.append(val)
+        
+        # Alias detection (simplified)
+        aliases = {}
         from_seen = False
         for token in tokens:
             if token.ttype in (Keyword, Keyword.DML) and token.value.upper() in ('FROM', 'JOIN'):
                 from_seen = True
                 continue
-            
             if from_seen:
-                if isinstance(token, IdentifierList):
-                    for identifier in token.get_identifiers():
-                        name = identifier.get_real_name()
-                        alias = identifier.get_alias()
-                        if name and alias:
-                            aliases[alias] = name
-                elif isinstance(token, Identifier):
+                if isinstance(token, Identifier):
                     name = token.get_real_name()
                     alias = token.get_alias()
                     if name and alias:
                         aliases[alias] = name
-                elif token.ttype in (Keyword, Keyword.DML):
-                    # Stop if we hit another keyword like WHERE, GROUP BY etc
-                    if token.value.upper() not in ('AS',):
-                        from_seen = False
-        
-        # Check if we are typing an alias (e.g. "t.")
-        if word_before_cursor and '.' in word_before_cursor:
-            alias_part = word_before_cursor.split('.')[0]
-            if alias_part in aliases:
-                # Suggest columns for this table
-                # We need to filter columns by table, but currently self.columns is just a list of names
-                # To support this properly, we need a map of table -> columns
-                # For now, we will just suggest all columns if alias matches
-                # Ideally, update_completer should pass a dict
-                pass
+                elif token.ttype in (Keyword, Keyword.DML) and token.value.upper() not in ('AS',):
+                    from_seen = False
 
         # Context-based suggestions
         suggestions = []
         
         if last_keyword in ['FROM', 'JOIN', 'UPDATE', 'INTO']:
             # Suggest tables
-            suggestions.extend(self.tables)
+            # Filter tables based on present_columns if any
+            if present_columns:
+                # Find tables that contain ALL present columns (or at least one? let's say at least one for now)
+                # Better: tables that contain ANY of the columns
+                candidate_tables = set()
+                for col in present_columns:
+                    if col in self.column_to_tables:
+                        candidate_tables.update(self.column_to_tables[col])
+                
+                if candidate_tables:
+                    suggestions.extend(list(candidate_tables))
+                else:
+                    suggestions.extend(self.tables)
+            else:
+                suggestions.extend(self.tables)
+                
         elif last_keyword in ['SELECT', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'ON', 'SET', 
                               'AND', 'OR', 'NOT', 'MIN', 'MAX', 'AVG', 'SUM', 'COUNT', 
                               'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE']:
-            # Suggest columns and tables (for aliasing)
-            suggestions.extend(self.columns)
+            # Suggest columns
+            # Filter columns based on present_tables if any
+            if present_tables:
+                candidate_columns = set()
+                for table in present_tables:
+                    if table in self.table_to_columns:
+                        candidate_columns.update(self.table_to_columns[table])
+                suggestions.extend(list(candidate_columns))
+            else:
+                suggestions.extend(self.columns)
+            
+            # Also suggest tables and keywords
             suggestions.extend(self.tables)
             suggestions.extend(self.keywords)
-            # Add aliases to suggestions
             suggestions.extend(aliases.keys())
         else:
-            # Default: Suggest keywords and tables (start of query)
+            # Default
             suggestions.extend(self.keywords)
             suggestions.extend(self.tables)
             
         # Filter and yield completions
+        seen = set()
         for suggestion in suggestions:
+            if suggestion in seen:
+                continue
+            seen.add(suggestion)
+            
             if suggestion.lower().startswith(word_before_cursor.lower()):
-                yield Completion(suggestion, start_position=-len(word_before_cursor))
+                # Check if this is a column to add table context
+                display_text = suggestion
+                if suggestion in self.column_to_tables:
+                    tables = self.column_to_tables[suggestion]
+                    # If we have filtered tables (present_tables), show those
+                    # Otherwise show all tables this column belongs to
+                    relevant_tables = [t for t in tables if t in present_tables] if present_tables else tables
+                    
+                    if relevant_tables:
+                        # Show up to 2 tables to avoid clutter
+                        table_str = ", ".join(relevant_tables[:2])
+                        if len(relevant_tables) > 2:
+                            table_str += "..."
+                        display_text = f"{suggestion} [{table_str}]"
+                
+                yield Completion(suggestion, start_position=-len(word_before_cursor), display=display_text)
 
 class ExcelSqlRepl:
     def __init__(self, auto_load_path=None):
@@ -149,22 +179,42 @@ class ExcelSqlRepl:
         ]
         self.completer = None
         self.update_completer()
+        
+        # Setup key bindings
+        self.kb = KeyBindings()
+        
+        @self.kb.add('c-c')
+        def _(event):
+            """Ctrl+C: Abort current input and return to prompt"""
+            # Raise KeyboardInterrupt to exit multi-line mode
+            raise KeyboardInterrupt()
 
     def update_completer(self):
         """Update the autocompleter with current tables and columns."""
         tables = self.loader.get_tables()
         columns = []
+        table_to_columns = {}
+        column_to_tables = {}
         
         # Add column names
         details = self.loader.get_table_details()
         if details:
             for d in details:
+                t_name = d['name']
+                table_to_columns[t_name] = []
+                
                 for col in d['columns']:
                     col_name = col.split(' (')[0]
                     if col_name not in columns:
                         columns.append(col_name)
                     
-        self.completer = AdvancedSQLCompleter(self.sql_keywords, tables, columns)
+                    table_to_columns[t_name].append(col_name)
+                    
+                    if col_name not in column_to_tables:
+                        column_to_tables[col_name] = []
+                    column_to_tables[col_name].append(t_name)
+                    
+        self.completer = AdvancedSQLCompleter(self.sql_keywords, tables, columns, table_to_columns, column_to_tables)
 
     def print_welcome(self):
         console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
@@ -266,32 +316,48 @@ class ExcelSqlRepl:
         console.print("  [cyan]schema <table>[/cyan] - Show CREATE TABLE statement")
         console.print("  [cyan]refresh[/cyan]       - Clear cache and reload data")
         console.print("  [cyan]exit / quit[/cyan]   - Exit the REPL")
-        console.print("  [cyan]<sql query>[/cyan]  - Execute SQL query (end with ;)\n")
+        console.print("  [cyan]<sql query>[/cyan]  - Execute SQL query (end with ;)")
+        console.print("  [cyan]<query> > file.csv[/cyan] - Save query results to CSV\n")
 
-    def execute_sql(self, query):
-        """Execute SQL query and print results using Rich."""
-        result = self.loader.execute_query(query)
+    def execute_sql(self, text):
+        """Execute a SQL query and display results."""
+        # Check for CSV export syntax: query > filename.csv
+        output_file = None
+        if '>' in text:
+            parts = text.split('>', 1)
+            text = parts[0].strip()
+            output_file = parts[1].strip()
+            
+        result = self.loader.execute_query(text)
         
         if isinstance(result, pd.DataFrame):
-            if not result.empty:
-                # Convert DataFrame to Rich Table
-                table = Table(show_header=True, header_style="bold magenta", box=box.SIMPLE)
-                
-                # Add columns
+            # If output file is specified, save to CSV
+            if output_file:
+                try:
+                    result.to_csv(output_file, index=False)
+                    console.print(f"[bold green]✓[/bold green] Saved {len(result)} rows to [cyan]{output_file}[/cyan]")
+                    return
+                except Exception as e:
+                    console.print(f"[bold red]Error saving to CSV:[/bold red] {e}")
+                    # Fall through to display the result
+            
+            # Display results in a table
+            if result.empty:
+                console.print("[yellow]Query returned no results.[/yellow]")
+            else:
+                table = Table(box=box.SIMPLE)
                 for col in result.columns:
-                    table.add_column(str(col))
+                    table.add_column(str(col), style="cyan")
                 
-                # Add rows
                 for _, row in result.iterrows():
                     table.add_row(*[str(val) for val in row])
                 
                 console.print(table)
-            else:
-                console.print("[yellow]Query returned no results.[/yellow]")
+                console.print(f"[dim]({len(result)} rows)[/dim]")
         elif result is None:
-            console.print("[green]Query executed successfully.[/green]")
+            console.print("[bold green]Query executed successfully.[/bold green]")
         else:
-            console.print(f"[bold red]Error:[/bold red] {result}")
+            console.print(f"[bold red]{result}[/bold red]")
     
     def execute_query_and_exit(self, query):
         """Execute a query and exit (for non-interactive mode)."""
@@ -309,14 +375,16 @@ class ExcelSqlRepl:
         
         while True:
             try:
-                # Prompt for input
+                # Prompt for input with autocomplete
                 text = self.session.prompt(
                     HTML('<prompt>(sql-excel)</prompt> '),
                     style=self.style,
                     multiline=True,
                     prompt_continuation=HTML('<continuation>   > </continuation>'),
-                    completer=self.completer, # Use the completer
-                    complete_while_typing=True
+                    completer=self.completer,
+                    complete_while_typing=False,  # Only show on Tab, not while typing
+                    enable_suspend=False,  # Disable Ctrl+Z
+                    key_bindings=self.kb  # Apply custom key bindings
                 )
                 
                 text = text.strip()
@@ -345,9 +413,17 @@ class ExcelSqlRepl:
                     self.execute_sql(text)
 
             except KeyboardInterrupt:
+                # Ctrl+C exits multi-line mode and returns to prompt
+                console.print()
                 continue
             except EOFError:
+                # Ctrl+D exits the REPL
+                console.print("\n[bold green]Goodbye![/bold green]")
                 break
+            except Exception as e:
+                # Catch any other errors
+                console.print(f"[bold red]Error:[/bold red] {e}")
+                continue
 
 if __name__ == '__main__':
     # Parse command-line arguments
