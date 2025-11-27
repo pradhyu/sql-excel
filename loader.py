@@ -43,38 +43,78 @@ class ExcelLoader:
         Loads Excel files from a directory or a single file.
         Returns a list of loaded table names.
         """
+        import concurrent.futures
+        
         loaded_tables = []
+        files_to_process = []
+        
         if os.path.isdir(path):
             for root, _, files in os.walk(path):
                 for file in files:
                     if file.endswith(('.xlsx', '.xls')):
                         filepath = os.path.join(root, file)
-                        tables = self.process_file(filepath)
-                        loaded_tables.extend(tables)
+                        files_to_process.append(filepath)
         elif os.path.isfile(path) and path.endswith(('.xlsx', '.xls')):
-            tables = self.process_file(path)
-            loaded_tables.extend(tables)
+            files_to_process.append(path)
         else:
             print(f"Invalid path or no Excel files found: {path}")
+            return []
+        
+        # Process files in parallel to read data
+        # Writing to DB must be sequential to avoid locking/concurrency issues
+        print(f"Processing {len(files_to_process)} files with {os.cpu_count()} threads...")
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit all read tasks
+            future_to_file = {executor.submit(self.read_excel_file, f): f for f in files_to_process}
+            
+            for future in concurrent.futures.as_completed(future_to_file):
+                filepath = future_to_file[future]
+                try:
+                    # Get read results (list of (table_name, df))
+                    results = future.result()
+                    
+                    # Write to DB sequentially
+                    for table_name, df in results:
+                        self.dataframe_to_db(df, table_name)
+                        loaded_tables.append(table_name)
+                        
+                    # Print status (using the timing from the read operation)
+                    # We could track write time too but reading is usually the bottleneck
+                    pass 
+                except Exception as e:
+                    print(f"Error processing file {filepath}: {e}")
         
         return loaded_tables
 
-    def process_file(self, filepath):
+    def read_excel_file(self, filepath):
         """
-        Reads an Excel file and converts each sheet to a SQLite table.
+        Reads an Excel file and returns a list of (table_name, dataframe) tuples.
         """
         import time
         start_time = time.time()
         
         filename = os.path.splitext(os.path.basename(filepath))[0]
         sanitized_filename = sanitize_identifier(filename)
-        loaded_tables = []
+        results = []
 
         try:
-            # Read all sheets
-            xls = pd.ExcelFile(filepath)
+            # Try using calamine engine first (much faster)
+            try:
+                xls = pd.ExcelFile(filepath, engine='calamine')
+            except ImportError:
+                # Fallback to default (openpyxl) if calamine not available
+                xls = pd.ExcelFile(filepath)
+            except Exception:
+                # Fallback for other errors
+                xls = pd.ExcelFile(filepath)
+                
             for sheet_name in xls.sheet_names:
-                df = pd.read_excel(xls, sheet_name=sheet_name)
+                # Use the same engine for reading sheets
+                if hasattr(xls, 'engine') and xls.engine == 'calamine':
+                    df = pd.read_excel(xls, sheet_name=sheet_name, engine='calamine')
+                else:
+                    df = pd.read_excel(xls, sheet_name=sheet_name)
                 
                 # Sanitize table name
                 sanitized_sheet = sanitize_identifier(sheet_name)
@@ -83,16 +123,17 @@ class ExcelLoader:
                 # Sanitize column names
                 df.columns = [sanitize_identifier(col) for col in df.columns]
                 
-                self.dataframe_to_db(df, table_name)
-                loaded_tables.append(table_name)
+                results.append((table_name, df))
                 
             elapsed = time.time() - start_time
-            print(f"Loaded {filepath} -> {len(loaded_tables)} table(s) in {elapsed:.2f}s")
+            engine_used = "calamine" if hasattr(xls, 'engine') and xls.engine == 'calamine' else "openpyxl"
+            print(f"Read {filepath} -> {len(results)} sheet(s) in {elapsed:.2f}s ({engine_used})")
                 
         except Exception as e:
-            print(f"Error processing {filepath}: {e}")
+            print(f"Error reading {filepath}: {e}")
+            raise e
 
-        return loaded_tables
+        return results
 
     def dataframe_to_db(self, df, table_name):
         """

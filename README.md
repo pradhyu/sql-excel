@@ -4,15 +4,14 @@ A Python-based interactive shell that allows you to load Excel files into a SQLi
 
 ## Features
 
+- **Fast Loading**: Uses `calamine` (Rust-based reader) and parallel processing for blazing fast Excel loading.
+- **Dual Backend**: Support for both `DuckDB` (default, high performance) and `SQLite` (compatibility).
 - **Load Excel Files**: Load a single `.xlsx` file or an entire directory of files.
-- **Persistent Caching**: Data is cached in `~/.sql_excel_data.db` - load once, query anytime!
-- **Auto-Loading**: Pass a data folder as argument to auto-load on startup.
-- **Non-Interactive Mode**: Execute queries directly from command line with `--query`.
 - **Automatic Sanitization**: 
   - Sheet names are converted to valid SQL table names (e.g., "Sales Data (2024)" -> `Sales_Data__2024_`).
   - Column headers are sanitized to be valid SQL identifiers (e.g., "Salary ($)" -> `Salary____`).
-- **SQL Querying**: Full SQLite support. You can `JOIN` tables derived from different Excel files.
-- **Large Dataset Support**: Handles large Excel files (tested with 100k+ rows) using Pandas.
+- **SQL Querying**: Full SQL support via DuckDB/SQLite. You can `JOIN` tables derived from different Excel files.
+- **Large Dataset Support**: Handles large Excel files (tested with 1M+ rows) efficiently.
 - **Rich UI**: Colorful, formatted output using the `rich` library.
 - **Multi-line Queries**: Write SQL queries across multiple lines. Press Enter to continue, end with `;` to execute.
 - **Smart History**: Multi-line queries are stored as a single history entry (use Up arrow to recall).
@@ -48,6 +47,7 @@ This project uses `uv` for fast dependency management.
    uv venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    uv pip install -r requirements.txt
+   # Installs: pandas, openpyxl, rich, prompt_toolkit, fastmcp, duckdb, python-calamine, sqlparse
    ```
 
 ## Usage

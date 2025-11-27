@@ -157,8 +157,8 @@ class AdvancedSQLCompleter(Completer):
                 yield Completion(suggestion, start_position=-len(word_before_cursor), display=display_text)
 
 class ExcelSqlRepl:
-    def __init__(self, auto_load_path=None):
-        self.loader = ExcelLoader()
+    def __init__(self, auto_load_path=None, db_path=None, backend='duckdb'):
+        self.loader = ExcelLoader(db_path=db_path, backend=backend)
         self.session = PromptSession(history=InMemoryHistory())
         self.auto_load_path = auto_load_path
         
@@ -450,8 +450,7 @@ if __name__ == '__main__':
     auto_load_path = args.data_folder or args.source
     
     # Create REPL instance with specified backend
-    repl = ExcelSqlRepl(auto_load_path=auto_load_path)
-    repl.loader = ExcelLoader(db_path=args.db, backend=args.backend)
+    repl = ExcelSqlRepl(auto_load_path=auto_load_path, db_path=args.db, backend=args.backend)
     
     # Non-interactive mode: execute query and exit
     if args.query:
