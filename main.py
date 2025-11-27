@@ -180,14 +180,14 @@ class ExcelSqlRepl:
         self.completer = None
         self.update_completer()
         
-        # Setup key bindings
+        # Setup key bindings for Ctrl+G to exit multi-line
         self.kb = KeyBindings()
         
-        @self.kb.add('c-c')
+        @self.kb.add('c-g')
         def _(event):
-            """Ctrl+C: Abort current input and return to prompt"""
-            # Raise KeyboardInterrupt to exit multi-line mode
-            raise KeyboardInterrupt()
+            """Ctrl+G: Cancel/abort current input"""
+            event.app.current_buffer.reset()
+            event.app.exit(exception=KeyboardInterrupt, style='class:aborting')
 
     def update_completer(self):
         """Update the autocompleter with current tables and columns."""
@@ -219,7 +219,8 @@ class ExcelSqlRepl:
     def print_welcome(self):
         console.print("[bold green]Welcome to the Excel-to-SQLite REPL.[/bold green]")
         console.print("Type [bold cyan]help[/bold cyan] or [bold cyan]?[/bold cyan] to list commands.")
-        console.print("Ends SQL queries with a semicolon ([bold yellow];[/bold yellow]).\n")
+        console.print("Ends SQL queries with a semicolon ([bold yellow];[/bold yellow]).")
+        console.print("[dim]Tip: Press Enter twice on empty line to cancel multi-line input.[/dim]\n")
         
         # Auto-load data if path provided and no data exists
         if self.auto_load_path:
@@ -317,7 +318,11 @@ class ExcelSqlRepl:
         console.print("  [cyan]refresh[/cyan]       - Clear cache and reload data")
         console.print("  [cyan]exit / quit[/cyan]   - Exit the REPL")
         console.print("  [cyan]<sql query>[/cyan]  - Execute SQL query (end with ;)")
-        console.print("  [cyan]<query> > file.csv[/cyan] - Save query results to CSV\n")
+        console.print("  [cyan]<query> > file.csv[/cyan] - Save query results to CSV")
+        console.print("\n[dim]Keyboard shortcuts:[/dim]")
+        console.print("  [cyan]Tab[/cyan]            - Show autocomplete")
+        console.print("  [cyan]Enter Enter[/cyan]    - Cancel multi-line (press Enter twice on empty line)")
+        console.print("  [cyan]Ctrl+D[/cyan]         - Exit REPL\n")
 
     def execute_sql(self, text):
         """Execute a SQL query and display results."""
@@ -382,9 +387,9 @@ class ExcelSqlRepl:
                     multiline=True,
                     prompt_continuation=HTML('<continuation>   > </continuation>'),
                     completer=self.completer,
-                    complete_while_typing=False,  # Only show on Tab, not while typing
+                    complete_while_typing=False,  # Only show on Tab
                     enable_suspend=False,  # Disable Ctrl+Z
-                    key_bindings=self.kb  # Apply custom key bindings
+                    key_bindings=self.kb  # Ctrl+G to cancel
                 )
                 
                 text = text.strip()
