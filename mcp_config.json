@@ -1,12 +1,9 @@
 {
     "mcpServers": {
-        "excel-sqlite": {
-            "command": "uv",
+        "excel-sqlite-rest": {
+            "command": "/Users/pkshrestha/git/sql-excel/.venv/bin/python",
             "args": [
-                "--directory",
-                "/Users/pkshrestha/git/sql-excel",
-                "run",
-                "mcp_server.py"
+                "/Users/pkshrestha/git/sql-excel/mcp_rest_client.py"
             ]
         }
     }

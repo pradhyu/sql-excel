@@ -35,8 +35,8 @@ There are two ways to configure the MCP server for Antigravity:
 6. Fill in the details:
    - **Name:** `excel-sqlite`
    - **Type:** `local` or `stdio`
-   - **Command:** `uv`
-   - **Args:** `--directory /Users/pkshrestha/git/sql-excel run mcp_server.py`
+   - **Command:** `/Users/pkshrestha/git/sql-excel/.venv/bin/python`
+   - **Args:** `/Users/pkshrestha/git/sql-excel/mcp_server.py`
 7. Click "Refresh" to activate the server
 
 #### Option 2: Manual Configuration
@@ -47,12 +47,9 @@ Add this to `~/.gemini/antigravity/mcp_config.json`:
 {
   "mcpServers": {
     "excel-sqlite": {
-      "command": "uv",
+      "command": "/Users/pkshrestha/git/sql-excel/.venv/bin/python",
       "args": [
-        "--directory",
-        "/Users/pkshrestha/git/sql-excel",
-        "run",
-        "mcp_server.py"
+        "/Users/pkshrestha/git/sql-excel/mcp_server.py"
       ]
     }
   }
@@ -71,12 +68,9 @@ Add this to your Claude Desktop MCP configuration file:
 {
   "mcpServers": {
     "excel-sqlite": {
-      "command": "uv",
+      "command": "/Users/pkshrestha/git/sql-excel/.venv/bin/python",
       "args": [
-        "--directory",
-        "/Users/pkshrestha/git/sql-excel",
-        "run",
-        "mcp_server.py"
+        "/Users/pkshrestha/git/sql-excel/mcp_server.py"
       ]
     }
   }
@@ -88,7 +82,7 @@ Add this to your Claude Desktop MCP configuration file:
 Use the provided `mcp_config.json` or configure your client to run:
 
 ```bash
-uv --directory /Users/pkshrestha/git/sql-excel run mcp_server.py
+/Users/pkshrestha/git/sql-excel/.venv/bin/python /Users/pkshrestha/git/sql-excel/mcp_server.py
 ```
 
 ## Testing the MCP Server

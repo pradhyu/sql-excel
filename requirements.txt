@@ -4,8 +4,6 @@ tabulate
 rich
 prompt_toolkit
 fastmcp
-pytest
-pytest-cov
-sqlparse
-duckdb
-python-calamine
+fastapi
+uvicorn
+httpx

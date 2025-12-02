@@ -28,7 +28,7 @@ class ExcelLoader:
             self.conn = duckdb.connect(db_path)
             self.cursor = self.conn.cursor()
         else:
-            self.conn = sqlite3.connect(db_path)
+            self.conn = sqlite3.connect(db_path, check_same_thread=False)
             self.cursor = self.conn.cursor()
             
             # SQLite-specific optimizations
