@@ -329,13 +329,13 @@ class ExcelSqlRepl:
 
     def execute_sql(self, text):
         """Execute a SQL query and display results."""
-        # Check for CSV export syntax: query > filename.csv
+        # Check for CSV export syntax: query >> filename.csv
         output_file = None
-        if '>' in text:
-            parts = text.split('>', 1)
+        if '>>' in text:
+            parts = text.split('>>', 1)
             text = parts[0].strip()
             output_file = parts[1].strip()
-            
+        
         result = self.loader.execute_query(text)
         
         if isinstance(result, pd.DataFrame):

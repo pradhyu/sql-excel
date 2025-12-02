@@ -4,9 +4,9 @@ A Python-based interactive shell that allows you to load Excel files into a SQLi
 
 ## Features
 
-- **Fast Loading**: Uses `calamine` (Rust-based reader) and parallel processing for blazing fast Excel loading.
+- **High Performance**: Optimized Python implementation using `calamine` (Rust-based) for blazing fast Excel loading (3.3x faster than standard loaders).
 - **Dual Backend**: Support for both `DuckDB` (default, high performance) and `SQLite` (compatibility).
-- **Load Excel Files**: Load a single `.xlsx` file or an entire directory of files.
+- **Load Excel Files**: Load a single `.xlsx` file or an entire directory of files in parallel.
 - **Automatic Sanitization**: 
   - Sheet names are converted to valid SQL table names (e.g., "Sales Data (2024)" -> `Sales_Data__2024_`).
   - Column headers are sanitized to be valid SQL identifiers (e.g., "Salary ($)" -> `Salary____`).

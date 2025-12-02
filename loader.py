@@ -223,7 +223,10 @@ class ExcelLoader:
         try:
             # Check if it's a SELECT query to return results
             if query.strip().upper().startswith("SELECT"):
-                df = pd.read_sql_query(query, self.conn)
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    df = pd.read_sql_query(query, self.conn)
                 return df
             else:
                 self.cursor.execute(query)
