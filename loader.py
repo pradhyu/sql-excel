@@ -5,7 +5,7 @@ from pathlib import Path
 from utils import sanitize_identifier
 
 class ExcelLoader:
-    def __init__(self, db_path=None, backend='duckdb'):
+    def __init__(self, db_path=None, backend='sqlite'):
         """
         Initialize ExcelLoader with specified backend.
         
@@ -38,10 +38,14 @@ class ExcelLoader:
             self.cursor.execute("PRAGMA temp_store=MEMORY")
             self.conn.commit()
 
-    def load_path(self, path):
+    def load_path(self, path, force=False):
         """
         Loads Excel files from a directory or a single file.
-        Returns a list of loaded table names.
+        Args:
+            path: Directory or file path.
+            force: If True, reload files even if tables already exist.
+        Returns:
+            List of loaded table names.
         """
         import concurrent.futures
         
@@ -60,13 +64,37 @@ class ExcelLoader:
             print(f"Invalid path or no Excel files found: {path}")
             return []
         
+        # Filter files if not forced
+        files_to_read = []
+        existing_tables = self.get_tables()
+        
+        if not force:
+            print("Checking for cached data...")
+            for filepath in files_to_process:
+                if self._should_process_file(filepath, existing_tables):
+                    files_to_read.append(filepath)
+                else:
+                    # Add to loaded_tables so the user knows they are available
+                    # We need to predict table names to add them to the list
+                    filename = os.path.splitext(os.path.basename(filepath))[0]
+                    sanitized_filename = sanitize_identifier(filename)
+                    # We can't know exact sheet names without opening, but we can guess 
+                    # or just not list them in the "loaded" return value if we didn't touch them.
+                    # Better: just print that we are skipping.
+                    print(f"Skipping {os.path.basename(filepath)} (already loaded). Use force=True to reload.")
+        else:
+            files_to_read = files_to_process
+
+        if not files_to_read:
+            print("All files are already loaded.")
+            return []
+
         # Process files in parallel to read data
-        # Writing to DB must be sequential to avoid locking/concurrency issues
-        print(f"Processing {len(files_to_process)} files with {os.cpu_count()} threads...")
+        print(f"Processing {len(files_to_read)} files with {os.cpu_count()} threads...")
         
         with concurrent.futures.ThreadPoolExecutor() as executor:
             # Submit all read tasks
-            future_to_file = {executor.submit(self.read_excel_file, f): f for f in files_to_process}
+            future_to_file = {executor.submit(self.read_excel_file, f): f for f in files_to_read}
             
             for future in concurrent.futures.as_completed(future_to_file):
                 filepath = future_to_file[future]
@@ -79,13 +107,34 @@ class ExcelLoader:
                         self.dataframe_to_db(df, table_name)
                         loaded_tables.append(table_name)
                         
-                    # Print status (using the timing from the read operation)
-                    # We could track write time too but reading is usually the bottleneck
-                    pass 
                 except Exception as e:
                     print(f"Error processing file {filepath}: {e}")
         
         return loaded_tables
+
+    def _should_process_file(self, filepath, existing_tables):
+        """
+        Check if a file needs to be processed by peeking at sheet names 
+        and checking if tables exist.
+        """
+        try:
+            # Reading sheet names is fast
+            xls = pd.ExcelFile(filepath)
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            sanitized_filename = sanitize_identifier(filename)
+            
+            all_sheets_exist = True
+            for sheet_name in xls.sheet_names:
+                sanitized_sheet = sanitize_identifier(sheet_name)
+                table_name = f"{sanitized_filename}_{sanitized_sheet}"
+                if table_name not in existing_tables:
+                    all_sheets_exist = False
+                    break
+            
+            return not all_sheets_exist
+        except Exception as e:
+            print(f"Error checking file {filepath}: {e}")
+            return True # Process if check fails
 
     def read_excel_file(self, filepath):
         """

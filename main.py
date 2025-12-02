@@ -233,20 +233,40 @@ class ExcelSqlRepl:
                 self.do_load(self.auto_load_path)
                 console.print()
 
-    def do_load(self, arg):
-        """Load an Excel file or directory."""
-        if not arg:
-            console.print("[bold red]Usage:[/bold red] load <path>")
+    def do_load(self, arg, force=False):
+        """
+        Load an Excel file or directory.
+        Usage: load <path> [--force]
+        """
+        if not arg and not self.auto_load_path:
+            console.print("[bold red]Usage:[/bold red] load <path> [--force]")
             return
         
+        # Handle arguments
+        path = arg
+        if ' --force' in arg:
+            path = arg.replace(' --force', '').strip()
+            force = True
+        
+        if not path:
+             # If called from do_refresh with empty arg but force=True, use auto_load_path
+             if self.auto_load_path:
+                 path = self.auto_load_path
+             else:
+                 console.print("[bold red]Usage:[/bold red] load <path> [--force]")
+                 return
+
         with console.status("[bold green]Loading files...[/bold green]"):
-            tables = self.loader.load_path(arg)
+            tables = self.loader.load_path(path, force=force)
         
         if tables:
             console.print(f"[bold green]Successfully loaded {len(tables)} tables.[/bold green]")
             self.update_completer() # Update autocompletion
         else:
-            console.print("[yellow]No tables loaded.[/yellow]")
+            if not force:
+                 console.print("[dim]No new tables loaded (cached). Use --force to reload.[/dim]")
+            else:
+                 console.print("[yellow]No tables loaded.[/yellow]")
 
     def do_tables(self, arg):
         """List all available tables with metadata."""
@@ -305,10 +325,8 @@ class ExcelSqlRepl:
             console.print("[yellow]No auto-load path specified. Use: load <path>[/yellow]")
             return
         
-        console.print("[yellow]Clearing cached data...[/yellow]")
-        self.loader.clear_data()
         console.print(f"[green]Reloading data from: {self.auto_load_path}[/green]")
-        self.do_load(self.auto_load_path)
+        self.do_load(self.auto_load_path, force=True)
 
     def do_help(self, arg):
         """List available commands."""
@@ -441,8 +459,8 @@ if __name__ == '__main__':
     parser.add_argument('--db', help='Path to SQLite database file (default: ~/.sql_excel_data.db)')
     parser.add_argument('--query', '-q', help='Execute a SQL query and exit (non-interactive mode)')
     parser.add_argument('--source', '-s', default='test_data', help='Default data source folder (default: test_data)')
-    parser.add_argument('--backend', choices=['sqlite', 'duckdb'], default='duckdb', 
-                        help='Database backend to use (default: duckdb for performance, sqlite for compatibility)')
+    parser.add_argument('--backend', choices=['sqlite', 'duckdb'], default='sqlite', 
+                        help='Database backend to use (default: sqlite for compatibility, duckdb for performance)')
     
     args = parser.parse_args()
     
